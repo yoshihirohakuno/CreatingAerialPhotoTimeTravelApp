@@ -114,7 +114,7 @@
         
         <!-- Section: 3D Terrain & View Control -->
         <section class="card">
-          <h2><i class="fa-solid fa-mountain"></i> 3D地形 & カメラ制御</h2>
+          <h2><i class="fa-solid fa-mountain"></i> 3D地形 & 地図表示制御</h2>
           <div class="control-row">
             <span class="control-label">3D地形表示</span>
             <label class="switch-toggle">
@@ -130,6 +130,25 @@
                 <span id="exaggeration-val" class="badge">1.5x</span>
               </div>
               <input type="range" id="terrain-exaggeration" min="0.5" max="3" step="0.1" value="1.5">
+            </div>
+          </div>
+          
+          <!-- Modern labels & roads overlay toggle -->
+          <div class="control-row">
+            <span class="control-label"><i class="fa-solid fa-map-location-dot"></i> 現代の道路・地名を重ねる</span>
+            <label class="switch-toggle">
+              <input type="checkbox" id="overlay-toggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+          
+          <div id="overlay-settings" class="terrain-subsettings hide">
+            <div class="control-group">
+              <div class="slider-label-row">
+                <label for="overlay-opacity">重ね合わせ不透明度:</label>
+                <span id="overlay-opacity-val" class="badge">35%</span>
+              </div>
+              <input type="range" id="overlay-opacity" min="10" max="80" step="5" value="35">
             </div>
           </div>
           

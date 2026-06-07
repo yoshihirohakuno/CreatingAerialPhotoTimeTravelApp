@@ -103,6 +103,9 @@ let splitRightEraIndex = 8; // 2画面分割の右側 (デフォルト: 現在)
 let is3D = false;
 let exaggeration = 1.5;
 
+let isOverlay = false;
+let overlayOpacity = 0.35;
+
 // タイムライン自動再生用タイマー
 let playbackInterval = null;
 let playbackSpeed = 2500; // ms
@@ -196,6 +199,14 @@ function initDomElements() {
   if (is3D) {
     document.getElementById('terrain-settings').classList.remove('hide');
   }
+  
+  // 地名・道路重ね合わせの状態反映
+  document.getElementById('overlay-toggle').checked = isOverlay;
+  if (isOverlay) {
+    document.getElementById('overlay-settings').classList.remove('hide');
+  }
+  document.getElementById('overlay-opacity').value = Math.round(overlayOpacity * 100);
+  document.getElementById('overlay-opacity-val').textContent = `${Math.round(overlayOpacity * 100)}%`;
 }
 
 // MapLibre 地図インスタンスの初期化
@@ -284,6 +295,26 @@ function initMaps() {
             'raster-opacity-transition': { duration: 300 } // フェード効果
           }
         });
+      });
+      
+      // 現代の道路・地名注記の重ね合わせ用レイヤーの追加 (空中写真の最前面に配置)
+      map.addSource('gsi-std-overlay', {
+        type: 'raster',
+        tiles: ['https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '国土地理院'
+      });
+      
+      map.addLayer({
+        id: 'gsi-std-overlay-layer',
+        type: 'raster',
+        source: 'gsi-std-overlay',
+        layout: {
+          visibility: isOverlay ? 'visible' : 'none'
+        },
+        paint: {
+          'raster-opacity': overlayOpacity
+        }
       });
       
       loadedCount++;
@@ -591,6 +622,39 @@ function updateExaggeration(val) {
       }
     });
   }
+}
+
+// 現代道路・地名注記の重ね合わせ制御
+function toggleOverlay(enabled) {
+  isOverlay = enabled;
+  const settings = document.getElementById('overlay-settings');
+  
+  if (isOverlay) {
+    settings.classList.remove('hide');
+  } else {
+    settings.classList.add('hide');
+  }
+  
+  maps.forEach(map => {
+    if (map.getLayer('gsi-std-overlay-layer')) {
+      map.setLayoutProperty('gsi-std-overlay-layer', 'visibility', isOverlay ? 'visible' : 'none');
+    }
+  });
+  
+  updateShareUrl();
+}
+
+function updateOverlayOpacity(val) {
+  overlayOpacity = parseFloat(val) / 100;
+  document.getElementById('overlay-opacity-val').textContent = `${val}%`;
+  
+  maps.forEach(map => {
+    if (map.getLayer('gsi-std-overlay-layer')) {
+      map.setPaintProperty('gsi-std-overlay-layer', 'raster-opacity', overlayOpacity);
+    }
+  });
+  
+  updateShareUrl();
 }
 
 // --- 9. 位置検索 (Geocoder Interface) ---
@@ -1025,6 +1089,8 @@ function updateShareUrl() {
   params.set('er', swipeRightEraIndex);
   params.set('spl', splitLeftEraIndex);
   params.set('spr', splitRightEraIndex);
+  params.set('ov', isOverlay ? '1' : '0');
+  params.set('ovop', Math.round(overlayOpacity * 100));
   
   const newUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
   
@@ -1042,6 +1108,8 @@ function parseUrlParams() {
   if (params.has('era')) currentEraIndex = parseInt(params.get('era'));
   if (params.has('3d')) is3D = params.get('3d') === '1';
   if (params.has('exag')) exaggeration = parseFloat(params.get('exag'));
+  if (params.has('ov')) isOverlay = params.get('ov') === '1';
+  if (params.has('ovop')) overlayOpacity = parseFloat(params.get('ovop')) / 100;
   
   if (params.has('el')) swipeLeftEraIndex = parseInt(params.get('el'));
   if (params.has('er')) swipeRightEraIndex = parseInt(params.get('er'));
@@ -1188,6 +1256,16 @@ function bindEvents() {
   // 起伏強調度
   document.getElementById('terrain-exaggeration').addEventListener('input', (e) => {
     updateExaggeration(e.target.value);
+  });
+  
+  // 地名・道路の重ね合わせトグル
+  document.getElementById('overlay-toggle').addEventListener('change', (e) => {
+    toggleOverlay(e.target.checked);
+  });
+  
+  // 重ね合わせ不透明度
+  document.getElementById('overlay-opacity').addEventListener('input', (e) => {
+    updateOverlayOpacity(e.target.value);
   });
   
   // カメラピッチ・方位スライダー
