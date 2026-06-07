@@ -214,6 +214,16 @@ function initMaps() {
   const containerIds = ['map-1', 'map-2', 'map-3', 'map-4'];
   let loadedCount = 0;
   
+  // 標高タイルのカスタムプロトコル登録とソースオブジェクト生成を1度だけ実行
+  let gsiTerrainSource = null;
+  if (useGsiTerrainSource) {
+    try {
+      gsiTerrainSource = useGsiTerrainSource(maplibregl.addProtocol);
+    } catch (e) {
+      console.warn('GSI terrain protocol registration failed:', e);
+    }
+  }
+  
   // MapLibre用基本スタイル (国土地理院 最新空中写真をベース)
   const baseMapStyle = {
     version: 8,
@@ -256,17 +266,15 @@ function initMaps() {
     }
     
     map.on('load', () => {
-      // 標高タイルのプロトコルとソースの登録
-      if (useGsiTerrainSource) {
+      // 標高ソースの登録と3D地形の適用
+      if (gsiTerrainSource) {
         try {
-          const gsiTerrainSource = useGsiTerrainSource(maplibregl.addProtocol);
           map.addSource('gsi-terrain', gsiTerrainSource);
-          
           if (is3D) {
             map.setTerrain({ source: 'gsi-terrain', exaggeration: exaggeration });
           }
         } catch (e) {
-          console.warn('3D Terrain source initialization failed:', e);
+          console.warn('3D Terrain source registration failed:', e);
         }
       }
       
