@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>航空写真タイムトラベル | 国土地理院タイル歴史的変遷マップ</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="国土地理院の年代別航空写真と3D標高データを活用し、日本全国の特定地点の歴史的変遷を視覚的に体験できるWebアプリケーションです。フライトシミュレーションや比較モードを搭載。">
+  <meta name="keywords" content="国土地理院, 地図, 航空写真, 歴史, タイムトラベル, 3D地形, 空撮, 渋谷, 富士山">
+  
+  <!-- FontAwesome for Premium Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts: Outfit (English numbers/headings) & Noto Sans JP (Japanese body text) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- MapLibre GL JS -->
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
+  
+  <!-- Turf.js for Geo calculations -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  
+  <!-- Main App Layout Container -->
+  <div id="app-container">
+    
+    <!-- Sidebar / Control Panel -->
+    <aside id="sidebar" class="glass-panel">
+      <!-- App Brand -->
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+        <div>
+          <h1>航空写真タイムトラベル</h1>
+          <p class="subtitle">Aerial Photo Time Travel</p>
+        </div>
+      </div>
+      
+      <!-- Collapsible Sidebar Toggle (Mobile) -->
+      <button id="sidebar-toggle-btn" class="sidebar-toggle" aria-label="サイドバー切り替え">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+      
+      <div class="sidebar-content">
+        
+        <!-- Section: Search & Presets -->
+        <section class="card">
+          <h2><i class="fa-solid fa-magnifying-glass"></i> 位置情報の検索</h2>
+          <div class="search-box">
+            <input type="text" id="search-input" placeholder="住所、地名、駅名を入力..." autocomplete="off">
+            <button id="search-clear-btn" class="icon-btn hide" aria-label="クリア"><i class="fa-solid fa-xmark"></i></button>
+            <button id="search-btn" class="primary-btn" aria-label="検索"><i class="fa-solid fa-search"></i></button>
+            
+            <!-- Autocomplete suggestions dropdown -->
+            <ul id="search-suggestions" class="suggestions-list hide"></ul>
+          </div>
+          
+          <!-- Preset Shortcuts -->
+          <div class="presets">
+            <span class="label">おすすめ地点:</span>
+            <div class="preset-tags">
+              <button class="preset-tag" data-lng="139.7016" data-lat="35.6580" data-zoom="16" data-pitch="30">渋谷駅</button>
+              <button class="preset-tag" data-lng="138.7274" data-lat="35.3606" data-zoom="12.5" data-pitch="65">富士山</button>
+              <button class="preset-tag" data-lng="135.7621" data-lat="35.0254" data-zoom="15" data-pitch="0">京都御所</button>
+              <button class="preset-tag" data-lng="139.7671" data-lat="35.6812" data-zoom="15.5" data-pitch="45">東京駅</button>
+              <button class="preset-tag" data-lng="132.4536" data-lat="34.3948" data-zoom="16.5" data-pitch="20">原爆ドーム</button>
+            </div>
+          </div>
+        </section>
+        
+        <!-- Section: View Modes -->
+        <section class="card">
+          <h2><i class="fa-solid fa-layer-group"></i> 比較モードの切り替え</h2>
+          <div class="mode-selector">
+            <button id="mode-single" class="mode-btn active" data-mode="single">
+              <i class="fa-solid fa-map"></i>
+              <span>単一地図</span>
+            </button>
+            <button id="mode-swipe" class="mode-btn" data-mode="swipe">
+              <i class="fa-solid fa-arrows-left-right"></i>
+              <span>スライド比較</span>
+            </button>
+            <button id="mode-split" class="mode-btn" data-mode="split">
+              <i class="fa-solid fa-columns"></i>
+              <span>2画面分割</span>
+            </button>
+            <button id="mode-grid" class="mode-btn" data-mode="grid">
+              <i class="fa-solid fa-grip-2x2"></i>
+              <span>4画面グリッド</span>
+            </button>
+          </div>
+          
+          <!-- Era selectors for Swipe and Split modes -->
+          <div id="era-comparison-selects" class="comparison-selects hide">
+            <div class="select-group">
+              <label for="era-left-select">左 / Before 年代:</label>
+              <select id="era-left-select" class="custom-select"></select>
+            </div>
+            <div class="select-group">
+              <label for="era-right-select">右 / After 年代:</label>
+              <select id="era-right-select" class="custom-select"></select>
+            </div>
+          </div>
+        </section>
+        
+        <!-- Section: 3D Terrain & View Control -->
+        <section class="card">
+          <h2><i class="fa-solid fa-mountain"></i> 3D地形 & カメラ制御</h2>
+          <div class="control-row">
+            <span class="control-label">3D地形表示</span>
+            <label class="switch-toggle">
+              <input type="checkbox" id="terrain-toggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+          
+          <div id="terrain-settings" class="terrain-subsettings hide">
+            <div class="control-group">
+              <div class="slider-label-row">
+                <label for="terrain-exaggeration">起伏の強調度:</label>
+                <span id="exaggeration-val" class="badge">1.5x</span>
+              </div>
+              <input type="range" id="terrain-exaggeration" min="0.5" max="3" step="0.1" value="1.5">
+            </div>
+          </div>
+          
+          <div class="control-group">
+            <div class="slider-label-row">
+              <label for="map-pitch">カメラ傾斜角度:</label>
+              <span id="pitch-val" class="badge">30°</span>
+            </div>
+            <input type="range" id="map-pitch" min="0" max="85" step="1" value="30">
+          </div>
+          
+          <div class="control-group">
+            <div class="slider-label-row">
+              <label for="map-bearing">カメラ回転方位:</label>
+              <span id="bearing-val" class="badge">0°</span>
+            </div>
+            <input type="range" id="map-bearing" min="0" max="360" step="1" value="0">
+          </div>
+        </section>
+        
+        <!-- Section: Flight Simulator -->
+        <section class="card">
+          <h2><i class="fa-solid fa-plane"></i> フライトシミュレーション</h2>
+          <div class="flight-settings">
+            
+            <div class="point-selector">
+              <div class="point-input-row">
+                <div class="dot start-dot"></div>
+                <input type="text" id="flight-start-input" placeholder="スタート地点 (マップクリック or 検索)" readonly>
+                <button id="set-start-btn" class="icon-btn-accent" title="現在地をスタートに設定"><i class="fa-solid fa-location-crosshairs"></i></button>
+              </div>
+              <div class="point-input-row">
+                <div class="dot goal-dot"></div>
+                <input type="text" id="flight-goal-input" placeholder="ゴール地点 (マップクリック or 検索)" readonly>
+                <button id="set-goal-btn" class="icon-btn-accent" title="現在地をゴールに設定"><i class="fa-solid fa-location-crosshairs"></i></button>
+              </div>
+            </div>
+            
+            <div class="control-group">
+              <div class="slider-label-row">
+                <label for="flight-speed">飛行スピード:</label>
+                <span id="flight-speed-val" class="badge">標準</span>
+              </div>
+              <input type="range" id="flight-speed" min="1" max="5" step="1" value="3">
+            </div>
+            
+            <div class="control-group">
+              <div class="slider-label-row">
+                <label for="flight-altitude">飛行高度 (ズーム):</label>
+                <span id="flight-zoom-val" class="badge">16.0</span>
+              </div>
+              <input type="range" id="flight-altitude" min="10" max="18" step="0.5" value="16">
+            </div>
+            
+            <div class="control-row">
+              <span class="control-label"><i class="fa-solid fa-wand-magic-sparkles"></i> 飛行中のタイムトラベル</span>
+              <label class="switch-toggle">
+                <input type="checkbox" id="flight-timetravel-toggle" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <p class="help-text">有効にすると、スタートからゴールへ飛ぶ間に自動で過去から現在へ年代がクロスフェードします。</p>
+            
+            <div class="flight-buttons">
+              <button id="flight-play-btn" class="accent-btn flex-btn" disabled>
+                <i class="fa-solid fa-play"></i> <span>フライト開始</span>
+              </button>
+              <button id="flight-reset-btn" class="secondary-btn flex-btn" disabled>
+                <i class="fa-solid fa-rotate-left"></i> <span>リセット</span>
+              </button>
+            </div>
+          </div>
+        </section>
+        
+        <!-- Section: Share & Utils -->
+        <section class="card">
+          <h2><i class="fa-solid fa-share-nodes"></i> アプリ共有</h2>
+          <div class="share-row">
+            <input type="text" id="share-url-input" readonly value="読み込み中...">
+            <button id="share-copy-btn" class="primary-btn" title="URLをコピー"><i class="fa-solid fa-copy"></i> コピー</button>
+          </div>
+        </section>
+        
+        <!-- Copyright & Attribution (Required by GSI) -->
+        <footer class="sidebar-footer">
+          <p class="copyright">出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a></p>
+          <p class="license">国土地理院コンテンツ利用規約を遵守して表示しています。</p>
+        </footer>
+        
+      </div>
+    </aside>
+    
+    <!-- Main Map Workspace Area -->
+    <main id="map-workspace" class="layout-single">
+      
+      <!-- Unified Map Wrappers (Exactly 4 maps to fit all comparison layouts) -->
+      <div id="map-wrapper-1" class="map-wrapper">
+        <div id="map-1" class="map-element"></div>
+        <div class="map-label left-label hide" id="label-map-1">Before</div>
+      </div>
+      
+      <div id="map-wrapper-2" class="map-wrapper">
+        <div id="map-2" class="map-element"></div>
+        <div class="map-label right-label hide" id="label-map-2">After</div>
+      </div>
+      
+      <div id="map-wrapper-3" class="map-wrapper">
+        <div id="map-3" class="map-element"></div>
+        <div class="map-label grid-cell-label hide" id="label-map-3">Grid 3</div>
+      </div>
+      
+      <div id="map-wrapper-4" class="map-wrapper">
+        <div id="map-4" class="map-element"></div>
+        <div class="map-label grid-cell-label hide" id="label-map-4">Grid 4</div>
+      </div>
+      
+      <!-- Swipe Divider Bar (Used in Swipe Mode) -->
+      <div id="swipe-divider" class="swipe-divider-handle hide">
+        <div class="divider-line"></div>
+        <div class="divider-button">
+          <i class="fa-solid fa-arrows-left-right"></i>
+        </div>
+      </div>
+      
+      <!-- Global Map Overlay: Era Info Badge (Hidden in grid/split mode since labels display it) -->
+      <div id="era-info-badge" class="glass-overlay-badge">
+        <span class="label">表示年代:</span>
+        <span id="current-era-display-name" class="era-name">最新の航空写真</span>
+      </div>
+      
+      <!-- Global Map Overlay: Coordinate Info -->
+      <div id="coord-info-badge" class="glass-overlay-badge bottom-badge">
+        <span id="coord-text">緯度: - 経度: - ズーム: -</span>
+      </div>
+      
+      <!-- Global Map Overlay: Flight Stats Indicator -->
+      <div id="flight-status-indicator" class="glass-overlay-badge flight-status-badge hide">
+        <i class="fa-solid fa-plane-up pulse-icon"></i>
+        <span id="flight-status-text">フライト中...</span>
+        <button id="flight-abort-btn" class="abort-btn" title="フライト中断"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <!-- Floating Compass Widget -->
+      <div id="compass-widget" class="compass-container" title="北を上にする">
+        <i class="fa-solid fa-compass" id="compass-icon"></i>
+      </div>
+      
+      <!-- Timeline Control Overlay (Only visible in Single Map / Swipe modes) -->
+      <div id="timeline-overlay" class="glass-panel timeline-container">
+        <div class="timeline-controls">
+          <button id="timeline-play-btn" class="icon-btn-accent" title="タイムライン自動再生">
+            <i class="fa-solid fa-play"></i>
+          </button>
+          <button id="timeline-prev-btn" class="icon-btn" title="前の年代へ">
+            <i class="fa-solid fa-backward-step"></i>
+          </button>
+          <button id="timeline-next-btn" class="icon-btn" title="次の年代へ">
+            <i class="fa-solid fa-forward-step"></i>
+          </button>
+          <div class="speed-select-wrapper">
+            <select id="timeline-speed-select" class="mini-select" title="再生速度">
+              <option value="4000">超低速 (4s)</option>
+              <option value="2500" selected>標準 (2.5s)</option>
+              <option value="1500">高速 (1.5s)</option>
+              <option value="800">超高速 (0.8s)</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Timeline Slider -->
+        <div class="timeline-slider-wrapper">
+          <div class="timeline-ticks" id="timeline-ticks-container">
+            <!-- Ticks generated dynamically via JS -->
+          </div>
+          <div class="timeline-bar-bg"></div>
+          <input type="range" id="timeline-slider" min="0" max="8" value="8" step="1">
+        </div>
+      </div>
+      
+    </main>
+    
+  </div>
+  
+  <!-- Custom Popup Toast Notification -->
+  <div id="toast-notification" class="toast-popup hide">
+    <i class="fa-solid fa-circle-check toast-icon"></i>
+    <span id="toast-message">メッセージ</span>
+  </div>
+  
+  <!-- Application Core Logic (Loaded as a module to handle top-level imports) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
